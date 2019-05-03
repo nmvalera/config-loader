@@ -9,7 +9,7 @@
 """
 
 import marshmallow
-from marshmallow import Schema, post_load
+from marshmallow import Schema, post_load, INCLUDE
 
 from ..exceptions import ValidationError
 from ..fields import UnwrapNested
@@ -36,7 +36,7 @@ class InterpolatingSchema(Schema):
                                                      substitution_template=self._substitution_template)
         super().__init__(*args, **kwargs)
 
-    def load(self, data, many=None, partial=None):
+    def load(self, data, many=None, partial=None, unknown=None):
         """Deserialize a data structure to an object defined by this Schema’s fields
 
         :param data: Data object to load from
@@ -45,6 +45,8 @@ class InterpolatingSchema(Schema):
         :type many: bool
         :param partial: whether to ignore missing fields
         :type partial: bool | tuple
+        :param unknown: how to handle unknown fields
+        :type unknown: None | EXCLUDE | INCLUDE | RAISE
         :returns: Deserialized data
         :type return: dict
         """
@@ -53,7 +55,7 @@ class InterpolatingSchema(Schema):
             data = self.interpolator.interpolate_recursive(data)
 
         try:
-            return super().load(data, many, partial)
+            return super().load(data, many, partial, unknown)
         except marshmallow.exceptions.ValidationError as e:
             raise ValidationError(e.normalized_messages())
 
@@ -61,20 +63,9 @@ class InterpolatingSchema(Schema):
 class ExtraFieldsSchema(Schema):
     """Schema class that preserves fields provided in input data but that were omitted in schema fields"""
 
-    @post_load(pass_original=True)
-    def add_extra_fields(self, data, original_data):
-        """Add field from input data that were not listed as a schema fields
-
-        :param data: Data to complete
-        :type data: dict
-        :param extra_data: Extra data to insert
-        :type extra_data: dict
-        """
-        extra_fields = set(original_data) - set(value.data_key or field for field, value in self.fields.items())
-        for field in extra_fields:
-            data[field] = original_data[field]
-
-        return data
+    class Meta:
+        # https://marshmallow.readthedocs.io/en/3.0/quickstart.html#handling-unknown-fields
+        unknown = INCLUDE
 
 
 class UnwrapNestedSchema(Schema):
